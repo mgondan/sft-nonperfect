@@ -117,6 +117,42 @@ ic = function(ab, aB, Ab, AB, t=1:10)
   all(Fab + FAB <= FaB + FAb)
 }
 
+# Interaction contrast
+ic = function(ab, aB, Ab, AB, t=1:10, c=1)
+{
+#  if(ab$C != c)
+#    ab$D = Inf
+#  
+#  if(aB$C != c)
+#    aB$D = Inf
+#  
+#  if(Ab$C != c)
+#    Ab$D = Inf
+#  
+#  if(AB$C != c)
+#    AB$D = Inf
+  
+  Fab = ecdf(ab$D)(t)
+  FaB = ecdf(aB$D)(t)
+  FAb = ecdf(Ab$D)(t)
+  FAB = ecdf(AB$D)(t)
+  
+  all(Fab + FAB <= FaB + FAb)
+}
+
+for(i in 1:10000)
+{
+  t = sim()
+  r = resp(t)
+  if(!ic(r$ab, r$aB, r$Ab, r$AB))
+  {
+    print(t)
+    print(r)
+  }
+}
+
+
+
 for(i in 1:10000)
 {
   t = sim()
