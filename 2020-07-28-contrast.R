@@ -70,7 +70,7 @@ resp = function(t = sim())
   ab = race(t$a, t$b)
   aB = race(t$a, t$B)
   Ab = race(t$A, t$b)
-  AB = race(t$A, t$b)
+  AB = race(t$A, t$B)
   
   list(ab=ab, aB=aB, Ab=Ab, AB=AB)
 }
