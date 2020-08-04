@@ -33,6 +33,12 @@ sdom = function(a, A)
   return(a$D < A$D)
 }
 
+# Two processing times that satisfy stochastic dominance, regardless of response alternative
+sdom = function(a, A)
+{
+  return(a$D > A$D)
+}
+
 a = list(D=sample(1:10, size=1), C=sample(1:2, size=1))
 A = list(D=sample(1:10, size=1), C=sample(1:2, size=1))
 print(list(a=a, A=A, dom=sdom(a, A)))
