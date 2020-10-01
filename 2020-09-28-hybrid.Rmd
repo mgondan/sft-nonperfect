@@ -1,0 +1,356 @@
+---
+title: "Hybrider SIC"
+author: "Matthias"
+date: "28/9/2020"
+output: word_document
+---
+
+# 100% Accuracy bzw. Accuracy ignorieren
+
+Ich suche hier Gegenbeispiele mit brute force, indem ich vier Zeiten sample \(D_\text{a}, D_\text{A} \in \left\{1, ..., 10\right\}\) 
+und \(D_\text{b}, D_\text{B} \in \left\{1.1, ..., 10.1\right\}\) und dann die 4-Tupel extrahiere, für die stochastische Dominanz erfüllt 
+wird, also \(D_\text{a} > D_\text{A}\) und \(D_\text{b} > D_\text{B}\). Die Funktion ist etwas umständlich programmiert, damit ich sie 
+später leicht für accuaracy verallgemeinern kann.
+
+```{r}
+sdom = function(a, A)
+{
+  a$D > A$D
+}
+
+sim = function()
+{
+  a = list(D=sample(1:10, size=1))
+  A = list(D=sample(1:10, size=1))
+  
+  b = list(D=sample(1:10, size=1) + 0.1)
+  B = list(D=sample(1:10, size=1) + 0.1)
+
+  # Stochastic dominance satisfied?
+  if(sdom(a, A) & sdom(b, B))
+    return(list(a=a, A=A, b=b, B=B))
+  
+  # Otherwise, retry
+  sim()
+}
+
+# Example
+unlist(sim())
+```
+
+Später wird jeder dieser 4-Tupel als Punktverteilung aufgefasst und ausprobiert, ob der IC eingehalten wird. Zunächst werden die
+Reaktionszeiten auf ab, AB, aB, Ab generiert (Wettlaufmodell).
+
+```{r}
+# Winner of the race
+race = function(A, B)
+{
+  if(A$D <= B$D)
+    return(A)
+  
+  return(B)
+}
+
+# Responses to ab, aB, Ab, AB
+resp = function(d)
+{
+  ab = race(d$a, d$b)
+  aB = race(d$a, d$B)
+  Ab = race(d$A, d$b)
+  AB = race(d$A, d$B)
+  
+  list(ab=ab, aB=aB, Ab=Ab, AB=AB)
+}
+
+# Example
+d = sim()
+unlist(d)
+unlist(resp(d))
+```
+
+Jetzt wird der IC für einen Satz von RTs berechnet und geschaut, ob er kleiner-gleich Null ist.
+
+```{r}
+# Interaction contrast
+ic = function(ab, aB, Ab, AB, t=1:10)
+{
+  Fab = ecdf(ab$D)(t)
+  FaB = ecdf(aB$D)(t)
+  FAb = ecdf(Ab$D)(t)
+  FAB = ecdf(AB$D)(t)
+  
+  all(Fab + FAB <= FaB + FAb)
+}
+
+# Example
+d = sim()
+unlist(d)
+r = resp(d)
+unlist(r)
+ic(r$ab, r$aB, r$Ab, r$AB)
+
+## 1000 times, interrupt if IC test failed
+for(i in 1:1000)
+{
+  d = sim()
+  r = resp(d)
+  if(!ic(r$ab, r$aB, r$Ab, r$AB))
+  {
+    print(unlist(r))
+    break
+  }
+}
+```
+
+# Nonperfect accuracy
+
+Jetzt verallgemeinere ich auf non-perfect accuracy. Wie bereits bekannt, funktioniert es nicht, also müssten wir auch ein 
+Gegenbeispiel bekommen.
+
+```{r}
+# Stochastic dominance for P(D < t & C = 1)
+sdom = function(a, A)
+{
+  if(a$C == 1 & A$C == 1)
+    return(a$D > A$D)
+  
+  if(a$C == 1 & A$C != 1)
+    return(FALSE)
+  
+  if(a$C != 1 & A$C == 1)
+    return(TRUE)
+  
+  if(a$C != 1 & A$C != 1)
+    return(a$D < A$D)
+}
+
+sim = function()
+{
+  a = list(D=sample(1:10, size=1), C=sample(1:2, size=1))
+  A = list(D=sample(1:10, size=1), C=sample(1:2, size=1))
+  
+  b = list(D=sample(1:10, size=1) + 0.1, C=sample(1:2, size=1))
+  B = list(D=sample(1:10, size=1) + 0.1, C=sample(1:2, size=1))
+
+  # Stochastic dominance satisfied?
+  if(sdom(a, A) & sdom(b, B))
+    return(list(a=a, A=A, b=b, B=B))
+  
+  # Otherwise, retry
+  sim()
+}
+
+# Example
+unlist(sim())
+```
+
+Die Funktionen race und resp bleiben unverändert. Für den IC werden falsche Reaktionen auf Inf gesetzt [dann ist ecdf(D < t & C = 1) = 0].
+
+```{r}
+# Interaction contrast
+ic = function(ab, aB, Ab, AB, t=1:10)
+{
+  if(ab$C != 1)
+    ab$D = Inf
+  
+  if(aB$C != 1)
+    aB$D = Inf
+  
+  if(Ab$C != 1)
+    Ab$D = Inf
+  
+  if(AB$C != 1)
+    AB$D = Inf
+
+  Fab = ecdf(ab$D)(t)
+  FaB = ecdf(aB$D)(t)
+  FAb = ecdf(Ab$D)(t)
+  FAB = ecdf(AB$D)(t)
+  
+  all(Fab + FAB <= FaB + FAb)
+}
+
+## 1000 times, interrupt if IC test failed
+for(i in 1:1000)
+{
+  d = sim()
+  r = resp(d)
+  if(!ic(r$ab, r$aB, r$Ab, r$AB))
+  {
+    print('Counter example')
+    print(unlist(d))
+    print(unlist(r))
+    break
+  }
+}
+```
+
+Wir bekommen ein Gegenbeispiel, in dem stochastische Dominanz erfüllt ist, weil
+
+* \(P(D_\text{A} \leq t \cap C_\text{A} = 1) \ge P(D_\text{a} \leq t \cap C_\text{a} = 1)\)
+* \(P(D_\text{B} \leq t \cap C_\text{B} = 1) \ge P(D_\text{b} \leq t \cap C_\text{b} = 1)\).
+
+Der IC ist aber positiv,
+
+\(P(T_\text{AB} \leq t \cap R_\text{AB} = 1) + P(T_\text{ab} \leq t \cap R_\text{ab} = 1) > P(T_\text{aB} \leq t \cap R_\text{aB} = 1) + P(T_\text{Ab} \leq t \cap R_\text{Ab} = 1)\)
+
+# Hybrid aus Miller und Townsend
+
+Für Millers Spezialfall \(\mathcal{A} = \{\text{A}, \emptyset\}\) und \(\mathcal{B} = \{\text{B}, \emptyset\}\) funktioniert die Wettlaufungleichung, 
+auch die Verallgemeinerung für incorrect responses. Für Townsends allgemeineres Design \(\mathcal{A} = \{\text{A}, \text{a}\}\) und \(\mathcal{B} = \{\text{B}, \text{b}\}\)
+funktioniert der IC für incorrect responses nicht.
+
+Gibt es was dazwischen? Man könnte sich folgenden Hybrid anschauen, \(\mathcal{A} = \{\text{A}, \emptyset\}\) und \(\mathcal{B} = \{\text{B}, \text{b}\}\), und prüfen, ob
+
+\(P(T_\text{AB} \leq t \cap R_\text{AB} = 1) + P(T_\text{b} \leq t \cap R_\text{b} = 1) \leq P(T_\text{B} \leq t \cap R_\text{B} = 1) + P(T_\text{Ab} \leq t \cap R_\text{Ab} = 1)\)
+
+eingehalten wird. Es ist eigentlich klar, dass das nicht funktionieren kann, denn das Problem ist symmetrisch und wir ändern ja nur \(\mathcal{A}\), aber egal, vielleicht 
+erfahren wir etwas Neues. Für diesen Spezialfall muss nur \(D_\text{a}\) in der Simulation geändert werden.
+
+```{r}
+sim = function()
+{
+  a = list(D=Inf, C=sample(1:2, size=1))
+  A = list(D=sample(1:10, size=1), C=sample(1:2, size=1))
+  
+  b = list(D=sample(1:10, size=1) + 0.1, C=sample(1:2, size=1))
+  B = list(D=sample(1:10, size=1) + 0.1, C=sample(1:2, size=1))
+
+  # Stochastic dominance satisfied?
+  if(sdom(a, A) & sdom(b, B))
+    return(list(a=a, A=A, b=b, B=B))
+  
+  # Otherwise, retry
+  sim()
+}
+
+## 1000 times, interrupt if IC test failed
+for(i in 1:1000)
+{
+  d = sim()
+  r = resp(d)
+  if(!ic(r$ab, r$aB, r$Ab, r$AB))
+  {
+    print('Counter example')
+    print(unlist(d))
+    print(unlist(r))
+    break
+  }
+}
+```
+
+# SOA statt Salienz manipulieren
+
+Wir scheitern ja immer an der stochastischen Dominanz, die wird in unserem Szenario ja für \(\langle D, C\rangle\) definiert, wohingegen sich das
+Wettlaufmodell nur für die Processing time \(D\) interessiert und eben nicht für \(C\). Eine Möglichkeit, das Problem zu entschärfen, ist, statt
+der Salienz einer Reizkomponente (schwach, stark) den Onset zu manipulieren (früh, spät, mit SOA \(\tau\)). Dadurch wird die Processing time \(D\) 
+einfach um \(\tau\) nach hinten verschoben, und \(C\) bleibt gleich.
+
+Außerdem ignorieren wir \(C\) bei der Prüfung des IC. Wenn man genauer darüber nachdenkt, wird ein solches Experiment dadurch komplett 
+uninteressant, denn wenn man \(C\) ignoriert, kann man Millers oder Townsends Ungleichung immer herleiten (das ist der Punkt, auf den wir uns
+noch nicht geeinigt haben).
+
+```{r}
+sim = function(tau = 2.5)
+{
+  A = list(D=sample(1:10, size=1), C=sample(1:2, size=1))
+  a = list(D=tau + A$D, C=A$C)
+  
+  B = list(D=sample(1:10, size=1) + 0.1, C=sample(1:2, size=1))
+  b = list(D=tau + B$D, C=B$C)
+
+  # Stochastic dominance satisfied?
+  if(sdom(a, A) & sdom(b, B))
+    return(list(a=a, A=A, b=b, B=B))
+  
+  # Otherwise, retry
+  sim()
+}
+
+# Interaction contrast
+ic = function(ab, aB, Ab, AB, t=1:10)
+{
+  Fab = ecdf(ab$D)(t)
+  FaB = ecdf(aB$D)(t)
+  FAb = ecdf(Ab$D)(t)
+  FAB = ecdf(AB$D)(t)
+  
+  all(Fab + FAB <= FaB + FAb)
+}
+
+## 1000 times, interrupt if IC test failed
+for(i in 1:1000)
+{
+  d = sim()
+  r = resp(d)
+  if(!ic(r$ab, r$aB, r$Ab, r$AB))
+  {
+    print('Counter example')
+    print(unlist(d))
+    print(unlist(r))
+    break
+  }
+}
+```
+
+# Hybrid aus SOA-Manipulation und Miller
+
+A: \(\mathcal{A} = \{\text{A}, \emptyset\}\)
+
+B: \(\mathcal{A} = \{\text{B}, \tau\text{B}\}\)
+
+```{r}
+sim = function(tau = 2.5)
+{
+  A = list(D=sample(1:10, size=1), C=sample(1:2, size=1))
+  a = list(D=Inf, C=A$C)
+  
+  B = list(D=sample(1:10, size=1) + 0.1, C=sample(1:2, size=1))
+  b = list(D=tau + B$D, C=B$C)
+
+  # Stochastic dominance satisfied?
+  if(sdom(a, A) & sdom(b, B))
+    return(list(a=a, A=A, b=b, B=B))
+  
+  # Otherwise, retry
+  sim()
+}
+
+# Interaction contrast
+ic = function(ab, aB, Ab, AB, t=1:10)
+{
+  if(ab$C != 1)
+    ab$D = Inf
+  
+  if(aB$C != 1)
+    aB$D = Inf
+  
+  if(Ab$C != 1)
+    Ab$D = Inf
+  
+  if(AB$C != 1)
+    AB$D = Inf
+
+  Fab = ecdf(ab$D)(t)
+  FaB = ecdf(aB$D)(t)
+  FAb = ecdf(Ab$D)(t)
+  FAB = ecdf(AB$D)(t)
+  
+  all(Fab + FAB <= FaB + FAb)
+}
+
+## 1000 times, interrupt if IC test failed
+for(i in 1:1000)
+{
+  d = sim()
+  r = resp(d)
+  if(!ic(r$ab, r$aB, r$Ab, r$AB))
+  {
+    print('Counter example')
+    print(unlist(d))
+    print(unlist(r))
+    break
+  }
+}
+```
+
