@@ -1,0 +1,94 @@
+\documentclass[a4paper,12pt]{article}
+\usepackage[utf8]{inputenc} 
+\usepackage[english]{babel}
+\usepackage{lmodern}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{amsmath}
+\usepackage{fontenc}
+%\usepackage{enumitem}
+\usepackage{amssymb}
+\usepackage{csquotes}
+\usepackage{tikz}
+\usepackage{physics}
+\usetikzlibrary{matrix}
+\usepackage[style=apa]{biblatex}
+
+
+\title{Interaction contrast assuming a parallel exhaustive model} 
+\author{Yiqi}
+\date{\today}
+
+
+\begin{document}
+\maketitle
+
+\vspace{24pt}
+
+\section{Basic assumption of a parallel exhaustive model on RT}
+\begin{align*}
+T_{AB \mid r} = \max(D_{A \mid r},D_{B \mid r})
+\end{align*}
+\par
+
+\section{Possible assumptions of a parallel exhaustive model on response}
+There are several ways to determine the response assuming a parallel exhaustive model.
+
+\subsection{The slower takes all}
+\begin{align*}
+R_{AB}=
+\begin{cases}
+C_A, & \text{ if } D_A>D_B \\
+C_B, & \text{ if } D_A \leq D_B
+\end{cases}
+\end{align*}
+
+I have been thinking about the psychological meaning of such a pattern. Under what circumstances should the final response determined only by the output of the slower process? Cannot think of a second example except ``report the identity of the second stimulus you perceive.''\par
+It appear that the nature of the task should require a complete suppression of the faster stimulus (i.e., the faster is defined as distractor).
+
+\subsection{All right}
+\begin{align*}
+R_{AB}=C_A \cdot C_B
+\end{align*}
+The final response is positive if and only if the outputs of both processes are positive. For example, the presence of a target should be reported if and only if it has been detected in both modalities.
+
+\subsection{Screening}
+\begin{align*}
+R_{AB}=(1-C_A) \cdot (1-C_B)
+\end{align*}
+The final response is positive if and only if the outputs of both processes are negative. For example, the participant can report ``safe'' if and only if the target is absent in both modalities.
+
+\subsection{XOR}
+\begin{align*}
+R_{AB}=C_A \cdot (1-C_B) + (1-C_A) \cdot C_B
+\end{align*}
+A positive response should be make if and only if the target appears exactly in one of the modalities. 
+
+\subsection{Match}
+\begin{align*}
+R_{AB}=1-\big( C_A \cdot (1-C_B) + (1-C_A) \cdot C_B \big)
+\end{align*}
+A positive response should be make if and only if the stimuli perceived in both modalities match each other.
+
+\par
+
+\vspace{24pt}
+
+\textbf{Remark}. Only the first pattern depends on which process is faster.
+
+\section{IC under a parallel exhaustive model with perfect accuracy}
+Since
+$\max(D_{a \mid r}, D_{b \mid r}) \leq t \iff \big (D_{a \mid r} \leq t \cap D_{b \mid r} \leq t \big)$
+, the inequality of IC for CDF can be derived directly.
+\begin{align*}
+& \big (\mathbb{P}(T_{ab} \leq t \mid r) + \mathbb{P}(T_{AB} \leq t \mid r) \big) - \big (\mathbb{P}(T_{aB} \leq t \mid r) + \mathbb{P}(T_{Ab} \leq t \mid r) \big) \\
+=& \big(\mathbb{P}(D_a \leq t \mid r) \cdot \mathbb{P}(D_b \leq t \mid r) - \mathbb{P}(D_a \leq t \mid r) \cdot \mathbb{P}(D_B \leq t \mid r) \big) \\
+& - \big(\mathbb{P}(D_A \leq t \mid r) \cdot \mathbb{P}(D_b \leq t \mid r) - \mathbb{P}(D_A \leq t \mid r) \cdot \mathbb{P}(D_B \leq t \mid r) \big) \\
+=& \big(\mathbb{P}(D_a \leq t \mid r) - \mathbb{P}(D_A \leq t \mid r) \big) \cdot \big(\mathbb{P}(D_b \leq t \mid r) - \mathbb{P}(D_B \leq t \mid r) \big) \\
+\geq & 0
+\end{align*} 
+
+\section{IC under a parallel exhaustive model with imperfect accuracy}
+
+
+\end{document}
