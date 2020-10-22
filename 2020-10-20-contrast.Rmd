@@ -1,0 +1,461 @@
+---
+title: "SIC mit SOA-Manipulation"
+author: "Matthias"
+date: "16 Oct 2020"
+output: word_document
+---
+
+# 100% Accuracy bzw. Accuracy ignorieren
+
+Ich suche hier Gegenbeispiele mit brute force, indem ich vier Zeiten sample \(D_\text{a}, D_\text{A} \in \left\{1, ..., 10\right\}\) 
+und \(D_\text{b}, D_\text{B} \in \left\{1.1, ..., 10.1\right\}\) und dann die 4-Tupel extrahiere, für die stochastische Dominanz erfüllt 
+wird, also \(D_\text{a} > D_\text{A}\) und \(D_\text{b} > D_\text{B}\). Die Funktion ist etwas umständlich programmiert, damit ich sie 
+später leicht für accuaracy verallgemeinern kann.
+
+```{r}
+sdom = function(a, A)
+{
+  a$D > A$D
+}
+
+sim = function()
+{
+  a = list(D=sample(1:10, size=1))
+  A = list(D=sample(1:10, size=1))
+  
+  b = list(D=sample(1:10, size=1) + 0.1)
+  B = list(D=sample(1:10, size=1) + 0.1)
+
+  # Stochastic dominance satisfied?
+  if(sdom(a, A) & sdom(b, B))
+    return(list(a=a, A=A, b=b, B=B))
+  
+  # Otherwise, retry
+  sim()
+}
+
+# Example
+unlist(sim())
+```
+
+Später wird jeder dieser 4-Tupel als Punktverteilung aufgefasst und ausprobiert, ob der IC eingehalten wird. Zunächst werden die
+Reaktionszeiten auf ab, AB, aB, Ab generiert (Wettlaufmodell).
+
+```{r}
+# Winner of the race
+race = function(A, B)
+{
+  if(A$D <= B$D)
+    return(A)
+  
+  return(B)
+}
+
+# Responses to ab, aB, Ab, AB
+resp = function(d)
+{
+  ab = race(d$a, d$b)
+  aB = race(d$a, d$B)
+  Ab = race(d$A, d$b)
+  AB = race(d$A, d$B)
+  
+  list(ab=ab, aB=aB, Ab=Ab, AB=AB)
+}
+
+# Example
+d = sim()
+unlist(d)
+unlist(resp(d))
+```
+
+Jetzt wird der IC für einen Satz von RTs berechnet und geschaut, ob er kleiner-gleich Null ist.
+
+```{r}
+# Interaction contrast
+ic = function(ab, aB, Ab, AB, t=1:10)
+{
+  Fab = ecdf(ab$D)(t)
+  FaB = ecdf(aB$D)(t)
+  FAb = ecdf(Ab$D)(t)
+  FAB = ecdf(AB$D)(t)
+  
+  all(Fab + FAB <= FaB + FAb)
+}
+
+# Example
+d = sim()
+unlist(d)
+r = resp(d)
+unlist(r)
+ic(r$ab, r$aB, r$Ab, r$AB)
+
+## 1000 times, interrupt if IC test failed
+for(i in 1:1000)
+{
+  d = sim()
+  r = resp(d)
+  if(!ic(r$ab, r$aB, r$Ab, r$AB))
+  {
+    print(unlist(r))
+    break
+  }
+}
+```
+
+# Nonperfect accuracy
+
+Jetzt verallgemeinere ich auf non-perfect accuracy. Wie bereits bekannt, funktioniert es nicht, also müssten wir auch ein 
+Gegenbeispiel bekommen.
+
+```{r}
+# Stochastic dominance for P(D < t & C = 1)
+sdom = function(a, A)
+{
+  if(a$C == 1 & A$C == 1)
+    return(a$D > A$D)
+  
+  if(a$C == 1 & A$C != 1)
+    return(FALSE)
+  
+  if(a$C != 1 & A$C == 1)
+    return(TRUE)
+  
+  if(a$C != 1 & A$C != 1)
+    return(a$D < A$D)
+}
+
+sim = function()
+{
+  a = list(D=sample(1:10, size=1), C=sample(1:2, size=1))
+  A = list(D=sample(1:10, size=1), C=sample(1:2, size=1))
+  
+  b = list(D=sample(1:10, size=1) + 0.1, C=sample(1:2, size=1))
+  B = list(D=sample(1:10, size=1) + 0.1, C=sample(1:2, size=1))
+
+  # Stochastic dominance satisfied?
+  if(sdom(a, A) & sdom(b, B))
+    return(list(a=a, A=A, b=b, B=B))
+  
+  # Otherwise, retry
+  sim()
+}
+
+# Example
+unlist(sim())
+```
+
+Die Funktionen race und resp bleiben unverändert. Für den IC werden falsche Reaktionen auf Inf gesetzt [dann ist ecdf(D < t & C = 1) = 0].
+
+```{r}
+# Interaction contrast
+ic = function(ab, aB, Ab, AB, t=1:10)
+{
+  if(ab$C != 1)
+    ab$D = Inf
+  
+  if(aB$C != 1)
+    aB$D = Inf
+  
+  if(Ab$C != 1)
+    Ab$D = Inf
+  
+  if(AB$C != 1)
+    AB$D = Inf
+
+  Fab = ecdf(ab$D)(t)
+  FaB = ecdf(aB$D)(t)
+  FAb = ecdf(Ab$D)(t)
+  FAB = ecdf(AB$D)(t)
+  
+  all(Fab + FAB <= FaB + FAb)
+}
+
+## 1000 times, interrupt if IC test failed
+for(i in 1:1000)
+{
+  d = sim()
+  r = resp(d)
+  if(!ic(r$ab, r$aB, r$Ab, r$AB))
+  {
+    print('Counter example')
+    print(unlist(d))
+    print(unlist(r))
+    break
+  }
+}
+```
+
+Wir bekommen ein Gegenbeispiel, in dem stochastische Dominanz erfüllt ist, weil
+
+* \(P(D_\text{A} \leq t \cap C_\text{A} = 1) \ge P(D_\text{a} \leq t \cap C_\text{a} = 1)\)
+* \(P(D_\text{B} \leq t \cap C_\text{B} = 1) \ge P(D_\text{b} \leq t \cap C_\text{b} = 1)\).
+
+Der IC ist aber positiv,
+
+\(P(T_\text{AB} \leq t \cap R_\text{AB} = 1) + P(T_\text{ab} \leq t \cap R_\text{ab} = 1) > P(T_\text{aB} \leq t \cap R_\text{aB} = 1) + P(T_\text{Ab} \leq t \cap R_\text{Ab} = 1)\)
+
+# Hybrid aus Miller und Townsend
+
+Für Millers Spezialfall \(\mathcal{A} = \{\text{A}, \emptyset\}\) und \(\mathcal{B} = \{\text{B}, \emptyset\}\) funktioniert die Wettlaufungleichung, 
+auch die Verallgemeinerung für incorrect responses. Für Townsends allgemeineres Design \(\mathcal{A} = \{\text{A}, \text{a}\}\) und \(\mathcal{B} = \{\text{B}, \text{b}\}\)
+funktioniert der IC für incorrect responses nicht.
+
+Gibt es was dazwischen? Man könnte sich folgenden Hybrid anschauen, \(\mathcal{A} = \{\text{A}, \emptyset\}\) und \(\mathcal{B} = \{\text{B}, \text{b}\}\), und prüfen, ob
+
+\(P(T_\text{AB} \leq t \cap R_\text{AB} = 1) + P(T_\text{b} \leq t \cap R_\text{b} = 1) \leq P(T_\text{B} \leq t \cap R_\text{B} = 1) + P(T_\text{Ab} \leq t \cap R_\text{Ab} = 1)\)
+
+eingehalten wird. Es ist eigentlich klar, dass das nicht funktionieren kann, denn das Problem ist symmetrisch und wir ändern ja nur \(\mathcal{A}\), aber egal, vielleicht 
+erfahren wir etwas Neues. Für diesen Spezialfall muss nur \(D_\text{a}\) in der Simulation geändert werden.
+
+```{r}
+sim = function()
+{
+  a = list(D=Inf, C=sample(1:2, size=1))
+  A = list(D=sample(1:10, size=1), C=sample(1:2, size=1))
+  
+  b = list(D=sample(1:10, size=1) + 0.1, C=sample(1:2, size=1))
+  B = list(D=sample(1:10, size=1) + 0.1, C=sample(1:2, size=1))
+
+  # Stochastic dominance satisfied?
+  if(sdom(a, A) & sdom(b, B))
+    return(list(a=a, A=A, b=b, B=B))
+  
+  # Otherwise, retry
+  sim()
+}
+
+## 1000 times, interrupt if IC test failed
+for(i in 1:1000)
+{
+  d = sim()
+  r = resp(d)
+  if(!ic(r$ab, r$aB, r$Ab, r$AB))
+  {
+    print('Counter example')
+    print(unlist(d))
+    print(unlist(r))
+    break
+  }
+}
+```
+
+# SOA statt Salienz manipulieren
+
+Wir scheitern ja immer an der stochastischen Dominanz, die wird in unserem Szenario ja für \(\langle D, C\rangle\) definiert, wohingegen sich das
+Wettlaufmodell nur für die Processing time \(D\) interessiert und eben nicht für \(C\). Eine Möglichkeit, das Problem zu entschärfen, ist, statt
+der Salienz einer Reizkomponente (schwach, stark) den Onset zu manipulieren (früh, spät, mit SOA \(\tau\)). Dadurch wird die Processing time \(D\) 
+einfach um \(\tau\) nach hinten verschoben, und \(C\) bleibt gleich.
+
+Außerdem ignorieren wir \(C\) bei der Prüfung des IC. Wenn man genauer darüber nachdenkt, wird ein solches Experiment dadurch komplett 
+uninteressant, denn wenn man \(C\) ignoriert, kann man Millers oder Townsends Ungleichung immer herleiten (das ist der Punkt, auf den wir uns
+noch nicht geeinigt haben).
+
+```{r}
+sim = function(tau = 2.5)
+{
+  A = list(D=sample(1:10, size=1), C=sample(1:2, size=1))
+  a = list(D=tau + A$D, C=A$C)
+  
+  B = list(D=sample(1:10, size=1) + 0.1, C=sample(1:2, size=1))
+  b = list(D=tau + B$D, C=B$C)
+
+  # Stochastic dominance satisfied?
+  if(sdom(a, A) & sdom(b, B))
+    return(list(a=a, A=A, b=b, B=B))
+  
+  # Otherwise, retry
+  sim()
+}
+
+# Interaction contrast
+ic = function(ab, aB, Ab, AB, t=1:10)
+{
+  if(ab$C != 1)
+    ab$D = Inf
+  
+  if(aB$C != 1)
+    aB$D = Inf
+  
+  if(Ab$C != 1)
+    Ab$D = Inf
+  
+  if(AB$C != 1)
+    AB$D = Inf
+
+  Fab = ecdf(ab$D)(t)
+  FaB = ecdf(aB$D)(t)
+  FAb = ecdf(Ab$D)(t)
+  FAB = ecdf(AB$D)(t)
+  
+  all(Fab + FAB <= FaB + FAb)
+}
+
+## 1000 times, interrupt if IC test failed
+for(i in 1:1000)
+{
+  d = sim()
+  r = resp(d)
+  if(!ic(r$ab, r$aB, r$Ab, r$AB))
+  {
+    print('Counter example')
+    print(unlist(d))
+    print(unlist(r))
+    break
+  }
+}
+```
+
+(kein Gegenbeispiel)
+
+Vermutung: Funktioniert, weil stochastische Dominanz für \(P(T \le t \cap C=1)\) ja eingehalten wird. Sehr schön. Das ist sozusagen "neu".
+
+# Hybrid aus SOA-Manipulation und Miller
+
+\(\mathcal{A} = \{\text{A}, \emptyset\}\)
+
+\(\mathcal{A} = \{\text{B}, \tau\text{B}\}\)
+
+(hat sich erledigt, ist ja nur ein Spezialfall des SOA interaction contrasts)
+
+# Abbildung 
+
+Zunächst mal den klassischen SIC. Man erkennt, dass das Rechteck \(P(t - \tau \le D_\mathrm A \le t \cap t - \tau \le D_\mathrm B \le t )\) im 
+Subtrahend "fehlt"; deswegen ist der SIC positiv, der DIC dann negativ.
+
+```{r, echo=FALSE, fig.width=8, fig.height=4.2}
+par(mfrow=c(1, 2), mar=c(4, 2, 0, 0) + 0.1)
+
+plot(NULL, xlim=c(0, 10), ylim=c(0, 10), xlab='', ylab='', axes=FALSE)
+axis(1, at=c(-1, 0, 4, 6, 11), labels=c('', 0, expression(italic(t) - tau), expression(italic(t)), ''))
+axis(1, at=10, labels=expression(italic(D)[A]), tick=FALSE)
+axis(2, at=c(-1, 0, 4, 6, 11), labels=c('', 0, expression(italic(t) - tau), expression(italic(t)), ''))
+axis(2, at=10, labels=expression(italic(D)[B]), tick=FALSE)
+
+rect(4, 4, 11, 11, density = 20, angle = 45)
+rect(6, 6, 11, 11, density = 20, angle = 135)
+
+legend('bottomright', legend = c(expression(italic(D)[A] * ' > ' * italic(t) - tau * ' & ' * italic(D)[B] * ' > ' * italic(t) - tau), 
+       expression(italic(D)[A] * ' > ' * italic(t) * ' & ' * italic(D)[B] * ' > ' * italic(t))), bty='n', fill = 1, density = 20, angle = c(45, 135))
+
+plot(NULL, xlim=c(0, 10), ylim=c(0, 10), xlab='', ylab='', axes=FALSE)
+axis(1, at=c(-1, 0, 4, 6, 11), labels=c('', 0, expression(italic(t) - tau), expression(italic(t)), ''))
+axis(1, at=10, labels=expression(italic(D)[A]), tick=FALSE)
+axis(2, at=c(-1, 0, 4, 6, 11), labels=c('', 0, expression(italic(t) - tau), expression(italic(t)), ''))
+axis(2, at=10, labels=expression(italic(D)[B]), tick=FALSE)
+
+rect(4, 6, 11, 11, density = 20, angle = 45)
+rect(6, 4, 11, 11, density = 20, angle = 135)
+
+rect(4, 4, 6, 6, col='red')
+legend('bottomright', legend = c(expression(italic(D)[A] * ' > ' * italic(t) - tau * ' & ' * italic(D)[B] * ' > ' * italic(t) - tau), 
+       expression(italic(D)[A] * ' > ' * italic(t) * ' & ' * italic(D)[B] * ' > ' * italic(t))), bty='n', fill = 1, density = 20, angle = c(45, 135))
+```
+
+Diese Darstellung geht von einer leicht veränderten selective influence-Annahme aus, wodurch sich der
+Beweis auch etwas unterscheidet: Wir gehen von einer bivariaten Verteilung \(\langle D_\mathrm{A}, D_\mathrm{B}\rangle\) aus,
+die in allen Bedingungen (AB, ab, Ab, aB) gleich ist und durch das SOA nur um \(\tau\) "verschoben" wird. 
+Für Bedingung \(A(\tau) B\) (also A zu \(t=0\), B zu \(t = \tau\)) ist die bivariate Verteilung dann einfach
+
+\(\langle D_\mathrm{A}, D_{(\tau)\mathrm{B}}\rangle \sim \langle D_\mathrm{A}, D_\mathrm{B} + \tau\rangle\) 
+
+Ich hoffe, die Notation ergibt irgendwie Sinn. Wir bekommen für 
+
+* \(T_\mathrm{AB} = \min(D_\mathrm{A}, D_\mathrm{B})\)
+
+* \(T_{\mathrm{A}(\tau)\mathrm{B}} = \min(D_\mathrm{A}, D_\mathrm{B} + \tau)\)
+
+* \(T_{\mathrm{B}(\tau)\mathrm{A}} = \min(D_\mathrm{A} + \tau, D_\mathrm{B})\)
+
+* \(T_{(\tau)\mathrm{AB}} = \min(D_\mathrm{A} + \tau, D_\mathrm{B} + \tau)\)
+
+Und für die Wahrscheinlichkeiten \(P(T > t)\) dann wie gehabt
+
+* \(P(T_\mathrm{AB} > t) = P(D_\mathrm{A} > t \cap D_\mathrm{B}> t)\)
+
+* \(P(T_{\mathrm{A}(\tau)\mathrm{B}} > t) = P(D_\mathrm{A} > t \cap D_\mathrm{B} > t - \tau)\)
+
+* \(P(T_{\mathrm{B}(\tau)\mathrm{A}} > t) = P(D_\mathrm{A} > t - \tau \cap D_\mathrm{B} > t)\)
+
+* \(P(T_{(\tau)\mathrm{AB}} > t) = P(D_\mathrm{A} > t - \tau \cap D_\mathrm{B} > t - \tau)\)
+
+Das sind die Rechtecke von oben. Jetzt wird nicht ausmultipliziert, denn Unabhängigkeit von \(D_\mathrm{A}\) und \(D_\mathrm{B}\)
+wird ga nicht benötigt, sondern direkt die Doppeldifferenz angewendet. Was übrigbleibt, ist das rote Rechteck.
+
+## Herleitung per Fallunterscheidung
+
+Es ist ja bisher nicht gelungen, den interaction contrast per Fallunterscheidung herzuleiten, nicht einmal für 
+accuracy 100%. Vielleicht hilft eine Abbildung. Wir haben:
+
+\(T_\mathrm{AB} = \left\{
+  \begin{array}{ll}
+    D_\mathrm A & \text{if}\ D_\mathrm A \le D_\mathrm B\\
+    D_\mathrm B & \text{if}\ D_\mathrm A > D_\mathrm B
+  \end{array}
+\right.\)
+
+Die Wahrscheinlichkeit für eine schnelle Reaktion ist dann:
+
+\(P(T_\mathrm{AB} \le t) = P_\mathrm L(D_\mathrm A \le t \cap D_\mathrm A \le D_\mathrm B) + P_\mathrm R(D_\mathrm B \le t \cap D_\mathrm A > D_\mathrm B)\)
+
+Für den Interaktionskontrast haben wir
+
+\(P(T_\mathrm{AB} \le t) + P(T_\mathrm{ab} \le t) - P(T_\mathrm{Ab} \le t) - P(T_\mathrm{aB} \le t)\)
+
+\(\ \ \ \ = P_\mathrm L(D_\mathrm A \le t \cap D_\mathrm A \le D_\mathrm B) 
+    + P_\mathrm L(D_\mathrm a \le t \cap D_\mathrm a \le D_\mathrm b)\)
+    
+\(\ \ \ \ \ \ \ \ 
+    - P_\mathrm L(D_\mathrm A \le t \cap D_\mathrm A \le D_\mathrm b) 
+    - P_\mathrm L(D_\mathrm a \le t \cap D_\mathrm a \le D_\mathrm B) + P_\mathrm R(\dots) + P_\mathrm R(\dots) - P_\mathrm R(\dots) - P_\mathrm R(\dots)\)
+
+\(\ \ \ \ = P_\mathrm L(D_\mathrm A \le t \cap D_\mathrm A \le D_\mathrm B) 
+    + P_\mathrm L(D_\mathrm A \le t-\tau \cap D_\mathrm A \le D_\mathrm B)\)
+    
+\(\ \ \ \ \ \ \ \ 
+    - P_\mathrm L(D_\mathrm A \le t \cap D_\mathrm A \le D_\mathrm B + \tau) 
+    - P_\mathrm L(D_\mathrm A \le t - \tau \cap D_\mathrm A \le D_\mathrm B - \tau) + \cdots\)
+    
+Kann man die \(P_\mathrm L\) grafisch darstellen? Die haben die Form eines "Teppichmessers".
+
+```{r, echo=FALSE, fig.width=8, fig.height=4.2}
+par(mfrow=c(1, 2), mar=c(4, 2, 0, 0) + 0.1)
+
+plot(NULL, xlim=c(0, 10), ylim=c(0, 10), xlab='', ylab='', axes=FALSE)
+axis(1, at=c(-1, 0, 4, 6, 11), labels=c('', 0, expression(italic(t) - tau), expression(italic(t)), ''))
+axis(1, at=10, labels=expression(italic(D)[A]), tick=FALSE)
+axis(2, at=c(-1, 0, 4, 6, 11), labels=c('', 0, expression(italic(t) - tau), expression(italic(t)), ''))
+axis(2, at=10, labels=expression(italic(D)[B]), tick=FALSE)
+
+polygon(c(0, 4, 4, 0), c(0, 4, 11, 11), density = 20, angle = 45)
+polygon(c(0, 6, 6, 0), c(0, 6, 11, 11), density = 20, angle = 135)
+
+legend('bottomright', legend = c(expression(italic(D)[A] * ' < ' * italic(t) - tau * ' & ' * italic(D)[A] * ' < ' * italic(D)[B]), 
+       expression(italic(D)[A] * ' < ' * italic(t) * ' & ' * italic(D)[A] * ' < ' * italic(D)[B])), bty='n', fill = 1, density = 20, angle = c(45, 135))
+
+plot(NULL, xlim=c(0, 10), ylim=c(0, 10), xlab='', ylab='', axes=FALSE)
+axis(1, at=c(-1, 0, 4, 6, 11), labels=c('', 0, expression(italic(t) - tau), expression(italic(t)), ''))
+axis(1, at=10, labels=expression(italic(D)[A]), tick=FALSE)
+axis(2, at=c(-1, 0, 4, 6, 11), labels=c('', 0, expression(italic(t) - tau), expression(italic(t)), ''))
+axis(2, at=10, labels=expression(italic(D)[B]), tick=FALSE)
+
+polygon(c(0, 4, 4, 0), c(2, 6, 11, 11), density = 20, angle = 45)
+polygon(c(0, 6, 6, 0), c(-2, 4, 11, 11), density = 20, angle = 135)
+
+polygon(y=c(0, 4, 4, 0), x=c(0, 4, 6, 2), border='green', lwd=2)
+polygon(c(0, 4, 4, 0), c(0, 4, 6, 2), border='blue', lwd=2)
+
+legend('bottomright', legend = c(expression(italic(D)[A] * ' < ' * italic(t) - tau * ' & ' * italic(D)[A] * ' < ' * italic(D)[B] - tau), 
+       expression(italic(D)[A] * ' < ' * italic(t) * ' & ' * italic(D)[A] * ' < ' * italic(D)[B] + tau)), bty='n', fill = 1, density = 20, angle = c(45, 135))
+```
+
+Weil hier der distribution interaction contrast betrachtet wird und nicht der SIC, müssen die Flächen im rechten Bild diejenigen im
+linken Bild einschließen. Man sieht aber, dass das blaue Parallelogramm nicht doppelt belegt ist. So einfach ist es also nicht, 
+man muss \(P_\mathrm L\) und \(P_\mathrm R\) vermutlich gemeinsam betrachten. Das sieht aber vielversprechend aus, denn das 
+Parallelogramm kann an der Winkelhalbierenden gespiegelt werden (grün eingezeichnet) und verdeckt dann die entsprechende Fläche in \(P_\mathrm R\) und
+vice-versa.
+
+* Es müsste also möglich sein, den SOA interaction contrast für 100% accuracy auch herzuleiten, indem man 
+nicht \(T_\mathrm{AB} = \min(D_\mathrm A, D_\mathrm B)\) annimmt, sondern die Fallunterscheidung.
+
+* Und wenn das funktioniert, funktioniert vielleicht auch die Herleitung des SOA interaction contrasts
+  für non-perfect accuracy.
